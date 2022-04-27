@@ -1,0 +1,56 @@
+{
+    "colorsBar": {
+        "bg_c": {
+            "red": 0.063778,
+            "green": 0.064581,
+            "blue": 0.066667,
+            "alpha": 0.677966
+        },
+        "pri_c": {
+            "red": 0.309804,
+            "green": 0.819608,
+            "blue": 0.858824,
+            "alpha": 1.0
+        },
+        "bga_c": {
+            "red": 0.083826,
+            "green": 0.0837,
+            "blue": 0.09,
+            "alpha": 1.0
+        },
+        "ale_c": {
+            "red": 0.976471,
+            "green": 0.14902,
+            "blue": 0.447059,
+            "alpha": 1.0
+        },
+        "fon_c": {
+            "red": 0.870588,
+            "green": 0.866667,
+            "blue": 0.854902,
+            "alpha": 1.0
+        }
+    },
+    "paramsBar": {
+        "font": "Sans 8",
+        "font_offset": "2",
+        "int": {
+            "bar_h": 20,
+            "bar_r": 0,
+            "border_r": 0,
+            "border_l": 0,
+            "border_t": 0,
+            "border_b": 0,
+            "bar_padR": 2,
+            "bar_padL": 0,
+            "tray_off": 2,
+            "tray_max": 16,
+            "modul_padL": 1,
+            "modul_padR": 2
+        },
+        "others": {
+            "bar_pos": false,
+            "tray_p": "none"
+        }
+    }
+}

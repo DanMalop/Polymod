@@ -1,0 +1,383 @@
+#! /usr/bin/env python
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk
+from gi.repository import Gdk
+from json import dumps, loads
+from configparser import ConfigParser
+from typing import Any, Dict, Tuple
+import os
+from subprocess import call
+
+
+class controller:
+    def __init__(self) -> None:
+        pass
+    # ==========================================================================================================
+    # COLORS
+    # conversions
+
+    def getRgbaColors(self, colors_obj: Dict[str, Any]) -> Dict[str, Any]:
+        colors_objC = colors_obj.copy()
+        for key, value in colors_objC.items():
+            colors_objC[key] = value.get_rgba()
+        return colors_objC
+
+    def convertHexColors(self, colorsRgba: Dict[str, Any]) -> Dict[str, str]:
+
+        for key, value in colorsRgba.items():
+            colorsRgba[key] = '#%02x%02x%02x%02x' % (int(
+                value.alpha*255), int(value.red*255), int(value.green*255), int(value.blue*255))
+        return colorsRgba
+
+    # Write
+    def writeBarColors(self, saveColorFile: str, hexColors: Dict[str, str]) -> Tuple:
+        try:
+            colorConfig = ConfigParser()
+            colorConfig.read(saveColorFile)
+        except:
+            return False, "Error reading the color.ini file, look at the colors.ini ubication (~/.config/polybar/colors.ini by default)"
+
+        try:
+            colorConfig.set("color", "background", hexColors['bg_c'])
+            colorConfig.set("color", "background-alt", hexColors['bga_c'])
+            colorConfig.set("color", "foreground", hexColors['fon_c'])
+            colorConfig.set("color", "foreground-alt", hexColors['fon_c'])
+            colorConfig.set("color", "module-fg", hexColors['fon_c'])
+            colorConfig.set("color", "primary", hexColors['pri_c'])
+            colorConfig.set("color", "secondary", hexColors['ale_c'])
+            colorConfig.set("color", "alert", hexColors['ale_c'])
+        except:
+            return False, "Error setting the color.ini file, look at the colors.ini file (~/.config/polybar/colors.ini by default)"
+
+        try:
+            with open(saveColorFile, 'w') as configFile:
+                colorConfig.write(configFile)
+        except:
+            return False, "Error writting the color.ini file, look at the colors.ini file (~/.config/polybar/colors.ini by default)"
+        return True, None
+
+    def writeMenuColors(self, menuColorFile: str, indMenuColors: bool, hexColors_bar: Dict[str, str], hexColors_menu: Dict[str, str] = None) -> bool:
+
+        if indMenuColors:
+            hexColors = hexColors_menu
+        else:
+            hexColors = hexColors_bar
+
+        for key, value in hexColors.items():
+            hexColors[key] = "#" + value[3::] + value[1:3]
+        try:
+            with open(menuColorFile, 'w') as color:
+                color.write(
+                    """*{
+                al:   #00000000;
+                bg:   """ + hexColors['bg_c'] + """;
+                pri:  """ + hexColors['pri_c'] + """;
+                bga:  """ + hexColors['pri_c'][0:-2] + "33" + """;
+                bar:  """ + hexColors['fon_c'] + """;
+                fg:   """ + hexColors['fon_c'] + """;
+                ac:   """ + hexColors['bga_c'] + """;
+                }""")
+        except:
+            print("Error writting bar colors")
+            return False
+        return True
+
+    def saveLastColors(self, lastStateFile: str, colors_obj: Dict[str, Any]) -> bool:
+        colors_objC = colors_obj.copy()
+
+        for key, value in colors_objC.items():
+            rgba = value.get_rgba()
+            colors_objC[key] = {'red': round(rgba.red, 6), 'green': round(
+                rgba.green, 6), 'blue': round(rgba.blue, 6), 'alpha': round(rgba.alpha, 6)}
+
+        openFile = open(lastStateFile, 'r')
+        stateFile = openFile.read()
+        jsonColors = loads(stateFile)
+        jsonColors['colorsBar'] = colors_objC
+        saveFile = dumps(jsonColors, indent=4)
+        try:
+            with open(lastStateFile, 'w') as jsonFile:
+                jsonFile.write(saveFile)
+        except:
+            print("Error writting the save last state file")
+            return False
+        return True
+
+    # load
+    def loadLastColors(self, lastStateFile: str, colors_obj: Dict[str, Any]) -> bool:
+        try:
+            openFile = open(lastStateFile, 'r')
+            stateFile = openFile.read()
+            savedColors = loads(stateFile)
+
+            for key, value in colors_obj.items():
+                rgba = savedColors['colorsBar'][key]
+                value.set_rgba(Gdk.RGBA(
+                    red=rgba['red'], green=rgba['green'], blue=rgba['blue'], alpha=rgba['alpha']))
+            return True
+        except:
+            print("Error loading the last state")
+            return False
+
+    # ===========================================================================================================
+    # FONTS
+    def fontParameters(self, font_obj: Dict[str, Any]) -> Dict[str, str]:
+        font = font_obj.copy()
+        fontString = str(font['font_ns'].get_font_name())
+        font_offset = str(int(font['font_off'].get_value()))
+        if fontString[-2::].isdigit():
+            # if the font size has 2 digits
+            font_name = fontString[0:-3]
+            font_size = fontString[-2::]
+        else:
+            # if thee font size has only one digit
+            font_name = fontString[0:-2]
+            font_size = fontString[-1::]
+        return {'font_name': font_name, 'font_size': font_size, 'font_offset': font_offset}
+
+    def polybarFont(self, font_par: Dict[str, str]) -> Dict[str, str]:
+        font_0 = font_par['font_name'] + ":size=" + \
+            font_par['font_size'] + ";" + font_par['font_offset']
+        font_1 = "waffle:size=" + \
+            font_par['font_size'] + ";" + font_par['font_offset']
+        font_2 = "Font Awesome 5 Free:style=Solid:pixelsize=" + \
+            font_par['font_size']+";" + font_par['font_offset']
+        font_3 = "Font Awesome 5 Brands:pixelsize=" + \
+            font_par['font_size']+";" + font_par['font_offset']
+        font_4 = "unifont:fontformat=truetype:size=" + \
+            font_par['font_size'] + ":antialias=false;" + \
+            font_par['font_offset']
+
+        return {'font_0': font_0, 'font_1': font_1, 'font_2': font_2, 'font_3': font_3, 'font_4': font_4}
+
+    # ============================================================================================================
+    # PARAMETERS
+    def getBarParams(self, polybarParams_obj: Dict[str, Any]) -> Dict[str, Dict]:
+
+        intParams = polybarParams_obj['int'].copy()
+        othersParams = polybarParams_obj['others'].copy()
+
+        for key, value in intParams.items():
+            intParams[key] = int(value.get_value())
+
+        bar_pos = othersParams['bar_pos']
+        tray_p = othersParams['tray_p']
+
+        othersParams['bar_pos'] = bool(bar_pos.get_active())
+        othersParams['tray_p'] = str(tray_p.get_active_text())
+
+        return {'int': intParams, 'others': othersParams}
+
+    def writeBarParams(self, barParametersFile: str, polybarParams: Dict[str, Dict], font_par: Dict[str, str]) -> bool:
+        intParams = polybarParams['int']
+        otherParams = polybarParams['others']
+        paramListFile = ["bar-height", "bar-radius", "border-right", "border-left", "border-top", "border-bottom",
+                         "bar-padding-r", "bar-padding-l", "tray-offset-x", "tray-maxsize", "module-padding-l", "module-padding-r"]
+        intparamListV = list(intParams.values())
+
+        try:
+            paramsConfig = ConfigParser()
+            paramsConfig.read(barParametersFile)
+        except:
+            print("error obteniendo el archivo")
+            return False
+        try:
+
+            for i in range(len(list(font_par.values()))):
+                paramsConfig.set("parameters", "font-"+str(i),
+                                 font_par['font_'+str(i)])
+
+            for i in range(len(intparamListV)):
+                paramsConfig.set(
+                    "parameters", paramListFile[i], str(intparamListV[i]))
+
+            paramsConfig.set("parameters", "bar-position",
+                             str(otherParams['bar_pos']))
+            paramsConfig.set("parameters", "tray-position",
+                             str(otherParams['tray_p']))
+
+        except:
+            print("Writting parameters error")
+            return False
+
+        try:
+            with open(barParametersFile, 'w') as configFile:
+                paramsConfig.write(configFile)
+        except:
+            print("error escribiendo parametros")
+            return False
+        return True
+
+    def saveLastParams(self, lastStateFile: str, polybarParams: Dict[str, Dict], font_par: Dict[str, str]) -> bool:
+
+        fontButton = font_par['font_name'] + " " + font_par['font_size']
+        fontDict = {'font': fontButton, 'font_offset': font_par['font_offset']}
+
+        openFile = open(lastStateFile, 'r')
+        stateFile = openFile.read()
+        jsonParams = loads(stateFile)
+        jsonParams['paramsBar'] = {**fontDict, **polybarParams}
+        saveFile = dumps(jsonParams, indent=4)
+
+        try:
+            with open(lastStateFile, 'w') as jsonFile:
+                jsonFile.write(saveFile)
+        except:
+            print("Error writting the save last state file")
+            return False
+        return True
+
+    def loadLastParams(self, lastStateFile: str, polybarParams_obj: Dict[str, Any], fontBar_obj: Dict[str, Any]) -> bool:
+        try:
+            openFile = open(lastStateFile, 'r')
+            stateFile = openFile.read()
+            savedParams = loads(stateFile)
+
+            for key, value in polybarParams_obj['int'].items():
+                intParam = savedParams['paramsBar']['int'][key]
+                value.set_value(intParam)
+
+            # bar_pos = savedParams['paramsBar']['others']['bar_pos']
+            # otherParams_objC['others']['bar_pos'].
+            # otherParams_objC['others']['tray_p']
+
+            return True
+        except:
+            print("Error loading the last state")
+            return False
+
+class View:
+    def __init__(self, home: str):
+        self.interfazDir = f"{os.getcwd()}/pmview.glade"
+        self.builder = Gtk.Builder()
+
+        try:
+            self.builder.add_from_file(self.interfazDir)
+        except:
+            print("error reading the interfaz file")
+
+        self.mainWindow = self.builder.get_object("mainWindow")
+        #self.mainWindow.set_title("Polybar editor")
+        # self.saveWindow = self.builder.get_object("saveWindow")
+        # self.saveWindow.set_title("Save configuration file")
+
+        # get color objects and rgb colors
+        self.polybarColors_obj = {
+            'bg_c': self.builder.get_object("backgroundColor"),
+            'pri_c': self.builder.get_object("primaryColor"),
+            'bga_c': self.builder.get_object("bgAltColor"),
+            'ale_c': self.builder.get_object("alertColor"),
+            'fon_c': self.builder.get_object("fontColor")}
+
+        # get font object
+        self.fontBar_obj = {
+            'font_ns': self.builder.get_object("fontBar"),
+            'font_off': self.builder.get_object("fontOffset")}
+
+        # Get the parameters objects and its values
+        self.polybarParams_obj = {
+            'int': {
+                'bar_h': self.builder.get_object("barHeight"),
+                'bar_r': self.builder.get_object("borderRadius"),
+                'border_r': self.builder.get_object("borderRight"),
+                'border_l': self.builder.get_object("borderLeft"),
+                'border_t': self.builder.get_object("borderTop"),
+                'border_b': self.builder.get_object("borderBottom"),
+                'bar_padR': self.builder.get_object("barPaddingRight"),
+                'bar_padL': self.builder.get_object("barPaddingLeft"),
+                'tray_off': self.builder.get_object("trayOffsetX"),
+                'tray_max': self.builder.get_object("trayMaxsize"),
+                'modul_padL': self.builder.get_object("modulePaddingL"),
+                'modul_padR': self.builder.get_object("modulePaddingR")
+            },
+            'others': {
+                'bar_pos': self.builder.get_object("barPosition"),
+                'tray_p': self.builder.get_object("trayPosition")
+            }
+        }
+
+        # Save window dialog
+        # self.entrySaveName = self.builder.get_object("entrySaveName")
+        # self.saveButtonWindow = self.builder.get_object("saveButtonWindow")
+
+class Handler:
+    def __init__(self, home: str, view: object, controller: object) -> None:
+        self.view = view
+        self.controller = controller
+
+        # Directories
+        self.barColorsFile = f"{home}/.config/polybar/colors.ini"
+        self.barParametersFile = f"{home}/.config/polybar/parameters.ini"
+        self.menuColorsFile = f"{home}/.config/polybar/scripts/rofi/colors.rasi"
+        self.saveDir = f"{os.getcwd()}/../.saved/"
+        self.lastStateFile = f"{os.getcwd()}/../.state.json"
+
+        #view parameters
+        self.polybarColors_obj = self.view.polybarColors_obj
+        self.fontBar_obj = self.view.fontBar_obj
+        self.polybarParams_obj = self.view.polybarParams_obj
+
+        self.handlers = {"destroy": Gtk.main_quit,
+            "apply": self.polyApplyChanges,
+            "cancel": Gtk.main_quit,
+            # "save": self.showSaveWindow,
+            # "cancelsave": self.cancelSaveWindow,
+            # "savedestroy": self.cancelSaveWindow,
+            }
+        self.controller.loadLastColors(self.lastStateFile, self.polybarColors_obj)
+        self.controller.loadLastParams(self.lastStateFile, self.polybarParams_obj, self.fontBar_obj)
+        self.view.builder.connect_signals(self.handlers)
+        self.showApp(self.view.mainWindow)
+        self.finalize()
+
+    def polyApplyChanges(self, buttom):
+        # Colors
+        rgbaColors = self.controller.getRgbaColors(self.polybarColors_obj)
+        colors_pbar = self.controller.convertHexColors(rgbaColors)
+        self.controller.writeBarColors(self.barColorsFile, colors_pbar)
+        self.controller.saveLastColors(self.lastStateFile, self.polybarColors_obj)
+
+        self.controller.writeMenuColors(self.menuColorsFile, False, colors_pbar)
+
+        # Fonts
+        font_par = self.controller.fontParameters(self.fontBar_obj)
+        font_pbar = self.controller.polybarFont(font_par)
+
+        # Parameters
+        polybarParams = self.controller.getBarParams(self.polybarParams_obj)
+        self.controller.writeBarParams(self.barParametersFile, polybarParams, font_pbar)
+        self.controller.saveLastParams(self.lastStateFile, polybarParams, font_par)
+
+        call("polybar-msg cmd restart", shell=True)
+
+    def showApp(self, window: any) -> None:
+        window.show_all()
+
+    # def showSaveWindow(self, buttom) -> None:
+    #     self.view.saveWindow.show()
+    #     self.view.saveWindow.set_current_folder(self.saveDir)
+    #     self.view.entrySaveName.grab_focus()
+
+    # def saveConfigFile(self, buttom) -> None:
+
+    #     pass
+
+    # def cancelSaveWindow(self, arg1, arg2 = None) -> bool:
+    #     self.view.saveWindow.hide()
+    #     return True
+
+    def finalize(self) -> None:
+        Gtk.main()
+
+
+def main() -> None:
+    home = os.environ['HOME']
+
+    appView = View(home)
+    control = controller()
+    appHandler = Handler(home, appView, control)
+
+
+if __name__ == '__main__':
+    main()
