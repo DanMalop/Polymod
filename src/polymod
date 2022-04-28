@@ -250,8 +250,6 @@ class controller:
 class View:
     def __init__(self, home: str):
         self.interfazDir = f"{os.getcwd()}/pmview.glade"
-        self.builder = Gtk.Builder()
-
         try:
             self.builder.add_from_file(self.interfazDir)
         except:
